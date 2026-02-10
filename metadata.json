@@ -1,0 +1,7 @@
+{
+  "name": "Smart Receipt Scanner",
+  "description": "A mobile-optimized web app that uses AI to extract vendor, date, amount, and items from photos of receipts.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
