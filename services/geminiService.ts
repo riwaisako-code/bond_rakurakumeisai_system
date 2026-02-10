@@ -2,8 +2,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ReceiptData } from "../types";
 
-// Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Always use const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!apiKey || apiKey === 'PLACEHOLDER_API_KEY') {
+  console.error("Gemini API Key is missing or invalid. Please check your .env.local file.");
+}
+
+const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 export const extractReceiptData = async (base64Image: string, mimeType: string): Promise<ReceiptData> => {
   const model = 'gemini-3-flash-preview';
