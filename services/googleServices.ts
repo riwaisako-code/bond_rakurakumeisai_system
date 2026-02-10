@@ -9,7 +9,31 @@ const getToken = () => {
     return window.gapi.client.getToken().access_token;
 };
 
+// Robust date parser
+const parseDate = (dateStr: string): Date => {
+    // Try standard constructor
+    let date = new Date(dateStr);
+    if (!isNaN(date.getTime())) return date;
+
+    // Try Japanese format YYYY年MM月DD日
+    const jpDateMatch = dateStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+    if (jpDateMatch) {
+        return new Date(Number(jpDateMatch[1]), Number(jpDateMatch[2]) - 1, Number(jpDateMatch[3]));
+    }
+
+    // Try YYYY/MM/DD
+    const slashDateMatch = dateStr.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+    if (slashDateMatch) {
+        return new Date(Number(slashDateMatch[1]), Number(slashDateMatch[2]) - 1, Number(slashDateMatch[3]));
+    }
+
+    console.warn(`Could not parse date: ${dateStr}, defaulting to today`);
+    return new Date();
+};
+
 export const uploadImageToDrive = async (base64Image: string, contentType: string, fileName: string): Promise<string> => {
+    if (!DRIVE_FOLDER_ID) throw new Error("VITE_DRIVE_FOLDER_ID is not defined");
+
     const boundary = '-------314159265358979323846';
     const delimiter = "\r\n--" + boundary + "\r\n";
     const close_delim = "\r\n--" + boundary + "--";
@@ -41,15 +65,10 @@ export const uploadImageToDrive = async (base64Image: string, contentType: strin
     });
 
     if (!response.ok) {
-        throw new Error('Failed to upload image to Drive');
+        throw new Error('Failed to upload image to Drive ' + response.statusText);
     }
 
     const result = await response.json();
-
-    // Get the webViewLink (or we can just construct it)
-    // We need to make the file accessible or just use the private link if the user has access.
-    // Generally, just returning the ID or alternateLink is enough.
-    // Let's get the file fields to be sure.
 
     // Actually, let's fetch the file fields to get the webViewLink
     const fileResponse = await window.gapi.client.drive.files.get({
@@ -61,7 +80,9 @@ export const uploadImageToDrive = async (base64Image: string, contentType: strin
 };
 
 export const saveToSpreadsheet = async (receipt: ReceiptData, imageUrl: string): Promise<void> => {
-    const dateObj = new Date(receipt.date);
+    if (!SHEETS_FOLDER_ID) throw new Error("VITE_SHEETS_FOLDER_ID is not defined");
+
+    const dateObj = parseDate(receipt.date);
     const year = dateObj.getFullYear();
     const month = dateObj.getMonth() + 1;
     const sheetName = `${year}-${String(month).padStart(2, '0')}_経費精算`;
