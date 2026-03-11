@@ -3,6 +3,7 @@ import { ReceiptData } from '../types';
 
 const DRIVE_FOLDER_ID = import.meta.env.VITE_DRIVE_FOLDER_ID;
 const SHEETS_FOLDER_ID = import.meta.env.VITE_SHEETS_FOLDER_ID;
+const TEMPLATE_SHEET_ID = import.meta.env.VITE_TEMPLATE_SHEET_ID;
 
 // Helper to get access token from gapi client
 const getToken = () => {
@@ -11,17 +12,14 @@ const getToken = () => {
 
 // Robust date parser
 const parseDate = (dateStr: string): Date => {
-    // Try standard constructor
     let date = new Date(dateStr);
     if (!isNaN(date.getTime())) return date;
 
-    // Try Japanese format YYYY年MM月DD日
     const jpDateMatch = dateStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
     if (jpDateMatch) {
         return new Date(Number(jpDateMatch[1]), Number(jpDateMatch[2]) - 1, Number(jpDateMatch[3]));
     }
 
-    // Try YYYY/MM/DD
     const slashDateMatch = dateStr.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
     if (slashDateMatch) {
         return new Date(Number(slashDateMatch[1]), Number(slashDateMatch[2]) - 1, Number(slashDateMatch[3]));
@@ -29,6 +27,17 @@ const parseDate = (dateStr: string): Date => {
 
     console.warn(`Could not parse date: ${dateStr}, defaulting to today`);
     return new Date();
+};
+
+// 会計年度（4月始まり）の開始年を計算
+const getFiscalYear = (date: Date): number => {
+    const month = date.getMonth() + 1;
+    return month >= 4 ? date.getFullYear() : date.getFullYear() - 1;
+};
+
+// 月番号から日本語タブ名を取得（例: 2 → "2月"）
+const getMonthTabName = (month: number): string => {
+    return `${month}月`;
 };
 
 export const uploadImageToDrive = async (base64Image: string, contentType: string, fileName: string): Promise<string> => {
@@ -70,7 +79,6 @@ export const uploadImageToDrive = async (base64Image: string, contentType: strin
 
     const result = await response.json();
 
-    // Actually, let's fetch the file fields to get the webViewLink
     const fileResponse = await window.gapi.client.drive.files.get({
         fileId: result.id,
         fields: 'webViewLink, webContentLink'
@@ -81,14 +89,17 @@ export const uploadImageToDrive = async (base64Image: string, contentType: strin
 
 export const saveToSpreadsheet = async (receipt: ReceiptData, imageUrl: string): Promise<void> => {
     if (!SHEETS_FOLDER_ID) throw new Error("VITE_SHEETS_FOLDER_ID is not defined");
+    if (!TEMPLATE_SHEET_ID) throw new Error("VITE_TEMPLATE_SHEET_ID is not defined");
 
     const dateObj = parseDate(receipt.date);
-    const year = dateObj.getFullYear();
-    const month = dateObj.getMonth() + 1;
-    const sheetName = `${year}-${String(month).padStart(2, '0')}_経費精算`;
+    const today = new Date(); // 入力日（保存ボタンを押した日）
+    const month = today.getMonth() + 1; // 入力日の月を使用
+    const fiscalYear = getFiscalYear(today); // 入力日の会計年度を使用
+    const fiscalYearLabel = `${fiscalYear}年度_経費精算`;
+    const tabName = getMonthTabName(month);
 
-    // 1. Search for existing spreadsheet in the folder
-    const query = `name = '${sheetName}' and '${SHEETS_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`;
+    // 1. 会計年度ファイルをフォルダ内で検索
+    const query = `name = '${fiscalYearLabel}' and '${SHEETS_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`;
     const searchResponse = await window.gapi.client.drive.files.list({
         q: query,
         fields: 'files(id, name)',
@@ -98,69 +109,82 @@ export const saveToSpreadsheet = async (receipt: ReceiptData, imageUrl: string):
     let spreadsheetId = '';
 
     if (searchResponse.result.files && searchResponse.result.files.length > 0) {
+        // 既存の会計年度ファイルを使用
         spreadsheetId = searchResponse.result.files[0].id;
     } else {
-        // 2. Create new spreadsheet if not found
-        const createResponse = await window.gapi.client.sheets.spreadsheets.create({
-            resource: {
-                properties: {
-                    title: sheetName
+        // 2. テンプレートをコピーして新しい会計年度ファイルを作成
+        console.log(`テンプレートのコピーを試行中... ID: ${TEMPLATE_SHEET_ID}`);
+        try {
+            const copyResponse = await window.gapi.client.drive.files.copy({
+                fileId: TEMPLATE_SHEET_ID,
+                resource: {
+                    name: fiscalYearLabel,
+                    parents: [SHEETS_FOLDER_ID]
                 }
-            }
-        });
-        spreadsheetId = createResponse.result.spreadsheetId;
-
-        // Move the file to the correct folder (API creates in root by default)
-        // Actually, create method doesn't support 'parents' directly in v4 easily without Drive API move.
-        // Easier way: Create, then move.
-
-        // Get the file ID of the new spreadsheet (it's the same as spreadsheetId usually, but let's be safe)
-        // Actually createResponse returns spreadsheetId which IS the fileId.
-
-        // Move file: Add parent, remove old parents
-        const fileId = spreadsheetId;
-        const getFileResponse = await window.gapi.client.drive.files.get({
-            fileId: fileId,
-            fields: 'parents'
-        });
-        const previousParents = getFileResponse.result.parents.join(',');
-
-        await window.gapi.client.drive.files.update({
-            fileId: fileId,
-            addParents: SHEETS_FOLDER_ID,
-            removeParents: previousParents,
-            fields: 'id, parents'
-        });
-
-        // Add Header Row
-        await window.gapi.client.sheets.spreadsheets.values.update({
-            spreadsheetId: spreadsheetId,
-            range: 'A1:F1',
-            valueInputOption: 'RAW',
-            resource: {
-                values: [['日付', '店舗名', '費目', '合計金額', '通貨', '画像リンク']]
-            }
-        });
+            });
+            spreadsheetId = copyResponse.result.id;
+            console.log(`新しい会計年度ファイルを作成しました: ${fiscalYearLabel} (ID: ${spreadsheetId})`);
+        } catch (err: any) {
+            console.error("テンプレートのコピーに失敗しました。IDが正しいか、権限があるか確認してください。", err);
+            throw err;
+        }
     }
 
-    // 3. Append Row
+    // 3. 対象月のタブ（例: "4月"）にデータを追記
+
+    // 入力日（今日の日付）を「日のみ」で生成
+    const entryDate = today.getDate();
+
+    // 領収書の日付を (M/D) 形式で生成（日付が読み取れない場合は空欄）
+    const receiptDateSuffix = (receipt.date && receipt.date.trim())
+        ? `（${dateObj.getMonth() + 1}/${dateObj.getDate()}）`
+        : '';
+
+    // サマリー系アイテム（小計・消費税・合計など）を除外し、実際の購入品・使用用途のみ抽出
+    const SUMMARY_KEYWORDS = ['小計', '合計', '消費税', '税込', '税抜', '値引', '割引', 'ポイント', '釣り銭', 'お釣り'];
+    const productItems = receipt.items?.filter(
+        item => !SUMMARY_KEYWORDS.some(kw => item.name.includes(kw))
+    ) || [];
+    const itemNames = productItems.length > 0
+        ? productItems.map(item => item.name).join('、')
+        : (receipt.category || receipt.vendorName);
+    const purchasedItems = `${itemNames}${receiptDateSuffix}`;
+
+    // D列=入力日, E列=インボイス, F列=相手先(店舗名), G列=購入物+日付, H列=カテゴリー, I列=空, J列=支出金額
+    const invoiceValue = receipt.invoice === true ? '' : '✓';
     const values = [
         [
-            receipt.date,
+            entryDate,
+            invoiceValue,
             receipt.vendorName,
-            receipt.category,
-            receipt.totalAmount,
-            receipt.currency,
-            imageUrl
+            purchasedItems,
+            receipt.category || '',
+            '',
+            receipt.totalAmount
         ]
     ];
 
-    await window.gapi.client.sheets.spreadsheets.values.append({
+    // D列（D7以降）の既存データを取得して次の空き行を計算する
+    // appendは「シート全体の最終行」を基準にするため使わず、自分で行番号を特定する
+    const START_ROW = 7;
+    const existingResponse = await window.gapi.client.sheets.spreadsheets.values.get({
         spreadsheetId: spreadsheetId,
-        range: 'A1', // Appends to the first table found
+        range: `${tabName}!D${START_ROW}:D`
+    });
+    const existingValues = existingResponse.result.values;
+    // 既存データが何行あるか数えて、次の行番号を決定
+    const nextRow = START_ROW + (existingValues ? existingValues.length : 0);
+
+    // appendではなくupdateで特定の行に書き込む
+    await window.gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: spreadsheetId,
+        range: `${tabName}!D${nextRow}`,
         valueInputOption: 'USER_ENTERED',
         resource: {
             values: values
         }
     });
+
+    console.log(`${fiscalYearLabel} の「${tabName}」タブの D${nextRow} 行目にデータを書き込みました。`);
 };
+

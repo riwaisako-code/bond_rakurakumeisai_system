@@ -1,4 +1,5 @@
 
+
 declare global {
     interface Window {
         google: any;
@@ -9,7 +10,7 @@ declare global {
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY; // Using the same key if it supports Drive/Sheets, otherwise might need separate one. Usually OAuth token is enough for access, API key is for quota.
 // Scopes for Drive and Sheets
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets';
+const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets';
 
 let tokenClient: any;
 let gapiInited = false;

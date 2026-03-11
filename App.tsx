@@ -124,11 +124,17 @@ const App: React.FC = () => {
   };
 
   const handleSaveToGoogle = async () => {
-    if (!selectedReceipt || !isLoggedIn) return;
+    if (!selectedReceipt) return;
     setIsSaving(true);
     setError(null);
 
     try {
+      // 未ログインの場合は自動でログイン処理を実行
+      if (!isAuthenticated()) {
+        await handleLogin();
+        setIsLoggedIn(true);
+      }
+
       // 1. Upload Image to Drive
       const mimeType = selectedReceipt.rawImageUrl?.split(';')[0].split(':')[1] || 'image/jpeg';
       const base64Data = selectedReceipt.rawImageUrl?.split(',')[1] || '';
@@ -153,6 +159,7 @@ const App: React.FC = () => {
     <div className="flex flex-col min-h-screen">
       <Header />
 
+      {/* --- Google認証バナーを一時的に非表示中 ---
       {!isLoggedIn && (
         <div className="bg-blue-50 p-4 text-center">
           <p className="text-sm text-blue-800 mb-2">Google連携機能を利用するにはログインが必要です</p>
@@ -164,6 +171,7 @@ const App: React.FC = () => {
           </button>
         </div>
       )}
+      --- */}
 
       {view === 'camera' && (
         <CameraView
@@ -244,7 +252,18 @@ const App: React.FC = () => {
                     src={selectedReceipt.rawImageUrl}
                     alt="full receipt"
                     className="w-full h-full object-cover"
-                    onClick={() => window.open(selectedReceipt.rawImageUrl, '_blank')}
+                    onClick={() => {
+                      if (!selectedReceipt.rawImageUrl) return;
+                      // data:URLをBlobに変換してから新タブで開く（モダンブラウザは data: URLを直接開けないため）
+                      const [header, base64] = selectedReceipt.rawImageUrl.split(',');
+                      const mime = header.split(':')[1].split(';')[0];
+                      const binary = atob(base64);
+                      const bytes = new Uint8Array(binary.length);
+                      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                      const blob = new Blob([bytes], { type: mime });
+                      const url = URL.createObjectURL(blob);
+                      window.open(url, '_blank');
+                    }}
                   />
                 </div>
               </div>
@@ -277,13 +296,49 @@ const App: React.FC = () => {
                       value={selectedReceipt.category}
                       onChange={(e) => updateReceipt({ ...selectedReceipt, category: e.target.value })}
                     >
-                      <option value="食費">食費</option>
-                      <option value="交通費">交通費</option>
+                      <option value="">　</option>
+                      <option value="仕入">仕入</option>
                       <option value="消耗品費">消耗品費</option>
-                      <option value="接待交際費">接待交際費</option>
+                      <option value="福利厚生費">福利厚生費</option>
+                      <option value="旅費交通費">旅費交通費</option>
+                      <option value="交際費">交際費</option>
+                      <option value="交際費(非)">交際費(非)</option>
+                      <option value="荷造運賃">荷造運賃</option>
                       <option value="通信費">通信費</option>
+                      <option value="販売促進費">販売促進費</option>
+                      <option value="広告費">広告費</option>
                       <option value="水道光熱費">水道光熱費</option>
+                      <option value="手数料">手数料</option>
+                      <option value="地代家賃">地代家賃</option>
+                      <option value="給料">給料</option>
+                      <option value="諸会費">諸会費</option>
+                      <option value="雑貨">雑貨</option>
+                      <option value="会議費">会議費</option>
+                      <option value="租税公課(印紙代)">租税公課(印紙代)</option>
+                      <option value="租税公課(行政手数料)">租税公課(行政手数料)</option>
+                      <option value="租税公課(その他)">租税公課(その他)</option>
+                      <option value="車輌費">車輌費</option>
+                      <option value="車輛費(非)">車輛費(非)</option>
+                      <option value="軽減税率">軽減税率</option>
+                      <option value="未払法人税等">未払法人税等</option>
+                      <option value="給食費">給食費</option>
+                      <option value="衛生保険費">衛生保険費</option>
+                      <option value="保育材料費">保育材料費</option>
+                      <option value="業務委託費">業務委託費</option>
+                      <option value="0">0</option>
                       <option value="その他">その他</option>
+                      <option value="本部へ">本部へ</option>
+                      <option value="支出合計">支出合計</option>
+                      <option value="収入分類">収入分類</option>
+                      <option value="保育料利用者負担">保育料利用者負担</option>
+                      <option value="延長料金">延長料金</option>
+                      <option value="教材費収入">教材費収入</option>
+                      <option value="給食費収入">給食費収入</option>
+                      <option value="その他収入">その他収入</option>
+                      <option value="職員給食費収入">職員給食費収入</option>
+                      <option value="○○銀行">○○銀行</option>
+                      <option value="前月残高">前月残高</option>
+                      <option value="本部から">本部から</option>
                     </select>
                   </div>
                 </div>
@@ -299,6 +354,34 @@ const App: React.FC = () => {
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">インボイス</label>
+                  <div className="flex items-center gap-4 py-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="invoice"
+                        value="true"
+                        checked={selectedReceipt.invoice === true}
+                        onChange={() => updateReceipt({ ...selectedReceipt, invoice: true })}
+                        className="accent-blue-600"
+                      />
+                      <span className="text-slate-700 font-medium">✓ あり</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="invoice"
+                        value="false"
+                        checked={selectedReceipt.invoice !== true}
+                        onChange={() => updateReceipt({ ...selectedReceipt, invoice: false })}
+                        className="accent-blue-600"
+                      />
+                      <span className="text-slate-700 font-medium">なし</span>
+                    </label>
+                  </div>
                 </div>
 
                 <div>
@@ -365,9 +448,8 @@ const App: React.FC = () => {
               </button>
               <button
                 onClick={handleSaveToGoogle}
-                disabled={!isLoggedIn || isSaving}
-                className={`flex-[2] py-4 font-bold rounded-2xl transition-colors flex items-center justify-center gap-2 ${!isLoggedIn ? 'bg-slate-300 text-white cursor-not-allowed' :
-                    isSaving ? 'bg-slate-800 text-white cursor-wait' : 'bg-slate-900 text-white active:bg-slate-800'
+                disabled={isSaving}
+                className={`flex-[2] py-4 font-bold rounded-2xl transition-colors flex items-center justify-center gap-2 ${isSaving ? 'bg-slate-800 text-white cursor-wait' : 'bg-slate-900 text-white active:bg-slate-800'
                   }`}
               >
                 {isSaving ? (
@@ -380,9 +462,11 @@ const App: React.FC = () => {
                 )}
               </button>
             </div>
+            {/* --- Googleログイン必須メッセージを一時的に非表示中 ---
             {!isLoggedIn && (
               <p className="text-xs text-center text-red-500">※ 保存するにはGoogleログインが必要です</p>
             )}
+            --- */}
           </div>
         )}
       </main>
