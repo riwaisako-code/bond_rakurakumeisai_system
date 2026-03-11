@@ -10,7 +10,6 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-*.local
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +21,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 環境変数ファイル（APIキーなど機密情報を含むため除外）
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# OS generated files
+Thumbs.db
