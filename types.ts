@@ -12,8 +12,10 @@ export interface ReceiptData {
   totalAmount: number;
   currency: string;
   taxAmount?: number;
+  preTaxAmount?: number;
   items: ReceiptItem[];
   category: string;
+  invoice?: boolean;
   rawImageUrl?: string;
 }
 
