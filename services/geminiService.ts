@@ -89,16 +89,31 @@ export const extractReceiptData = async (base64Image: string, mimeType: string):
   const rawJson = response.text || "{}";
   const parsed = JSON.parse(rawJson);
 
-  // レシートに8%/10%合計の明示がない場合、商品のtaxRateから自動計算
+  // 8%/10%合計の明示がない、または明らかに誤検知（1円など）の場合、商品のtaxRateから再集計
   let total8Amount = parsed.total8Amount || 0;
   let total10Amount = parsed.total10Amount || 0;
 
-  if (total8Amount === 0 && total10Amount === 0 && parsed.items?.length > 0) {
+  const isInvalidTotal = (total8Amount === 0 && total10Amount === 0) || (total8Amount < 10 && total10Amount < 10);
+
+  if (isInvalidTotal && parsed.items?.length > 0) {
+    total8Amount = 0;
+    total10Amount = 0;
+    
+    // 商品の合計が税抜きか税込かを判定するため、priceの合計を出す
+    const itemsTotal = parsed.items.reduce((sum: number, item: any) => sum + (item.price || 0), 0);
+    const isTaxExcluded = parsed.preTaxAmount && Math.abs(itemsTotal - parsed.preTaxAmount) < 5;
+
     for (const item of parsed.items) {
+      // isTaxExcludedがtrueならpriceを税込みに変換して加算
+      let itemPrice = item.price || 0;
+      if (isTaxExcluded) {
+        itemPrice = Math.floor(itemPrice * (item.taxRate === 8 ? 1.08 : 1.10));
+      }
+
       if (item.taxRate === 8) {
-        total8Amount += item.price || 0;
+        total8Amount += itemPrice;
       } else {
-        total10Amount += item.price || 0;
+        total10Amount += itemPrice;
       }
     }
   }
