@@ -247,24 +247,32 @@ const App: React.FC = () => {
 
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6">
               <div className="flex justify-center mb-4">
-                <div className="w-32 h-44 rounded-xl bg-slate-50 overflow-hidden border border-slate-100 cursor-zoom-in active:scale-105 transition-transform">
-                  <img
-                    src={selectedReceipt.rawImageUrl}
-                    alt="full receipt"
-                    className="w-full h-full object-cover"
-                    onClick={() => {
-                      if (!selectedReceipt.rawImageUrl) return;
-                      // data:URLをBlobに変換してから新タブで開く（モダンブラウザは data: URLを直接開けないため）
-                      const [header, base64] = selectedReceipt.rawImageUrl.split(',');
-                      const mime = header.split(':')[1].split(';')[0];
-                      const binary = atob(base64);
-                      const bytes = new Uint8Array(binary.length);
-                      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                      const blob = new Blob([bytes], { type: mime });
-                      const url = URL.createObjectURL(blob);
-                      window.open(url, '_blank');
-                    }}
-                  />
+                <div
+                  className="w-32 h-44 rounded-xl bg-slate-50 overflow-hidden border border-slate-100 cursor-zoom-in active:scale-105 transition-transform flex items-center justify-center"
+                  onClick={() => {
+                    if (!selectedReceipt.rawImageUrl) return;
+                    const [header, base64] = selectedReceipt.rawImageUrl.split(',');
+                    const mime = header.split(':')[1].split(';')[0];
+                    const binary = atob(base64);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    const blob = new Blob([bytes], { type: mime });
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                  }}
+                >
+                  {selectedReceipt.rawImageUrl?.startsWith('data:application/pdf') ? (
+                    <div className="flex flex-col items-center gap-2 text-red-500">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h1c.55 0 1 .45 1 1v1c0 .55-.45 1-1 1H9v-3z"/><path d="M13 13h2"/><path d="M13 15h1"/><path d="M13 17h2"/></svg>
+                      <span className="text-xs font-bold text-slate-500">PDF</span>
+                    </div>
+                  ) : (
+                    <img
+                      src={selectedReceipt.rawImageUrl}
+                      alt="full receipt"
+                      className="w-full h-full object-cover"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -513,7 +521,7 @@ const App: React.FC = () => {
                 <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></svg>
                 </div>
-                <span>写真をアップロード</span>
+                <span>写真・PDFをアップロード</span>
               </button>
             </div>
           )}
@@ -534,7 +542,7 @@ const App: React.FC = () => {
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            accept="image/*"
+            accept="image/*,application/pdf"
             className="hidden"
           />
         </div>
