@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showOptions, setShowOptions] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [customCategories, setCustomCategories] = useState<string[]>(() => {
@@ -32,6 +33,8 @@ const App: React.FC = () => {
         setIsLoggedIn(isAuthenticated());
       } catch (e) {
         console.error("Auth init failed", e);
+      } finally {
+        setIsAuthChecking(false);
       }
     };
     initAuth();
@@ -173,23 +176,51 @@ const App: React.FC = () => {
     }
   };
 
+  if (isAuthChecking) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-slate-500 font-medium">認証状態を確認中...</p>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <div className="flex flex-col min-h-screen bg-slate-50">
+        <Header />
+        <main className="flex-grow flex items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 max-w-sm w-full text-center space-y-6">
+            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" /><path d="M9 18c-4.51 2-5-2-7-2" /></svg>
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">ログインが必要です</h2>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                領収書の読み取りとスプレッドシートへの保存を行うには、Googleアカウントでログインしてください。
+              </p>
+            </div>
+            {error && (
+              <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl">
+                {error}
+              </div>
+            )}
+            <button
+              onClick={handleGoogleLogin}
+              className="w-full bg-blue-600 text-white font-bold py-4 px-4 rounded-2xl shadow-lg shadow-blue-600/20 active:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" /><path d="M9 18c-4.51 2-5-2-7-2" /></svg>
+              Googleでログイン
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
-
-      {/* --- Google認証バナーを一時的に非表示中 ---
-      {!isLoggedIn && (
-        <div className="bg-blue-50 p-4 text-center">
-          <p className="text-sm text-blue-800 mb-2">Google連携機能を利用するにはログインが必要です</p>
-          <button
-            onClick={handleGoogleLogin}
-            className="bg-white text-blue-600 font-bold py-2 px-4 rounded-full border border-blue-200 shadow-sm text-sm"
-          >
-            Googleでログイン
-          </button>
-        </div>
-      )}
-      --- */}
 
       {view === 'camera' && (
         <CameraView
@@ -539,11 +570,7 @@ const App: React.FC = () => {
                 )}
               </button>
             </div>
-            {/* --- Googleログイン必須メッセージを一時的に非表示中 ---
-            {!isLoggedIn && (
-              <p className="text-xs text-center text-red-500">※ 保存するにはGoogleログインが必要です</p>
-            )}
-            --- */}
+
           </div>
         )}
       </main>
