@@ -3,6 +3,7 @@ export interface ReceiptItem {
   name: string;
   price: number;
   quantity?: number;
+  taxRate?: 8 | 10;
 }
 
 export interface ReceiptData {
