@@ -17,6 +17,11 @@ const App: React.FC = () => {
   const [showOptions, setShowOptions] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [customCategories, setCustomCategories] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('custom_categories') || '[]'); } catch { return []; }
+  });
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,6 +58,19 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('receipt_history', JSON.stringify(receipts));
   }, [receipts]);
+
+  useEffect(() => {
+    localStorage.setItem('custom_categories', JSON.stringify(customCategories));
+  }, [customCategories]);
+
+  const handleAddCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name || customCategories.includes(name)) return;
+    setCustomCategories(prev => [...prev, name]);
+    if (selectedReceipt) updateReceipt({ ...selectedReceipt, category: name });
+    setNewCategoryName('');
+    setShowAddCategory(false);
+  };
 
   const processImage = async (base64String: string, mimeType: string) => {
     setIsScanning(true);
@@ -328,6 +346,9 @@ const App: React.FC = () => {
                       <option value="車輌費">車輌費</option>
                       <option value="車輛費(非)">車輛費(非)</option>
                       <option value="軽減税率">軽減税率</option>
+                      {customCategories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
                       <option value="未払法人税等">未払法人税等</option>
                       <option value="給食費">給食費</option>
                       <option value="衛生保険費">衛生保険費</option>
@@ -348,6 +369,33 @@ const App: React.FC = () => {
                       <option value="前月残高">前月残高</option>
                       <option value="本部から">本部から</option>
                     </select>
+                    {/* カスタムカテゴリ追加UI */}
+                    {showAddCategory ? (
+                      <div className="flex items-center gap-1 mt-2">
+                        <input
+                          type="text"
+                          autoFocus
+                          className="flex-grow text-sm text-slate-700 border-b border-blue-400 focus:outline-none py-0.5"
+                          placeholder="新しい項目名"
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); if (e.key === 'Escape') { setShowAddCategory(false); setNewCategoryName(''); } }}
+                        />
+                        <button
+                          onClick={handleAddCategory}
+                          className="text-xs font-bold text-white bg-blue-500 rounded px-2 py-1 shrink-0"
+                        >追加</button>
+                        <button
+                          onClick={() => { setShowAddCategory(false); setNewCategoryName(''); }}
+                          className="text-xs text-slate-400 shrink-0"
+                        >✕</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowAddCategory(true)}
+                        className="text-xs text-blue-500 font-bold mt-1 block"
+                      >＋ 項目を追加</button>
+                    )}
                   </div>
                 </div>
 
