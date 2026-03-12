@@ -134,6 +134,8 @@ export const saveToSpreadsheet = async (receipt: ReceiptData, imageUrl: string):
 
     // 入力日（今日の日付）を「日のみ」で生成
     const entryDate = today.getDate();
+    // 曜日を取得（例: "月", "火"）
+    const dayOfWeek = today.toLocaleDateString('ja-JP', { weekday: 'short' });
 
     // 領収書の日付を (M/D) 形式で生成（日付が読み取れない場合は空欄）
     const receiptDateSuffix = (receipt.date && receipt.date.trim())
@@ -150,17 +152,19 @@ export const saveToSpreadsheet = async (receipt: ReceiptData, imageUrl: string):
         : (receipt.category || receipt.vendorName);
     const purchasedItems = `${itemNames}${receiptDateSuffix}`;
 
-    // D列=入力日, E列=インボイス, F列=相手先(店舗名), G列=購入物+日付, H列=カテゴリー, I列=空, J列=支出金額
+    // C列=曜日, D列=入力日, E列=インボイス, F列=相手先(店舗名), G列=購入物+日付, H列=カテゴリー, I列=空, J列=8%対象合計, K列=10%対象合計
     const invoiceValue = receipt.invoice === true ? '' : '✓';
     const values = [
         [
+            dayOfWeek,
             entryDate,
             invoiceValue,
             receipt.vendorName,
             purchasedItems,
             receipt.category || '',
             '',
-            receipt.totalAmount
+            receipt.total8Amount || 0,
+            receipt.total10Amount || 0
         ]
     ];
 
@@ -178,7 +182,7 @@ export const saveToSpreadsheet = async (receipt: ReceiptData, imageUrl: string):
     // appendではなくupdateで特定の行に書き込む
     await window.gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId: spreadsheetId,
-        range: `${tabName}!D${nextRow}`,
+        range: `${tabName}!C${nextRow}`,
         valueInputOption: 'USER_ENTERED',
         resource: {
             values: values

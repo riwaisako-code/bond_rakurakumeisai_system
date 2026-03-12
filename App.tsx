@@ -356,6 +356,27 @@ const App: React.FC = () => {
                   </select>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">8%対象合計(税込)</label>
+                    <input
+                      type="number"
+                      className="w-full text-slate-700 font-medium border-b border-slate-200 focus:border-blue-500 outline-none py-1"
+                      value={selectedReceipt.total8Amount || 0}
+                      onChange={(e) => updateReceipt({ ...selectedReceipt, total8Amount: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">10%対象合計(税込)</label>
+                    <input
+                      type="number"
+                      className="w-full text-slate-700 font-medium border-b border-slate-200 focus:border-blue-500 outline-none py-1"
+                      value={selectedReceipt.total10Amount || 0}
+                      onChange={(e) => updateReceipt({ ...selectedReceipt, total10Amount: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">インボイス</label>
                   <div className="flex items-center gap-4 py-2">

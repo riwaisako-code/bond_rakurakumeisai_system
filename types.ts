@@ -12,6 +12,10 @@ export interface ReceiptData {
   totalAmount: number;
   currency: string;
   taxAmount?: number;
+  tax8Amount?: number;
+  tax10Amount?: number;
+  total8Amount?: number;
+  total10Amount?: number;
   preTaxAmount?: number;
   items: ReceiptItem[];
   category: string;
