@@ -34,10 +34,14 @@ export const extractReceiptData = async (base64Image: string, mimeType: string):
         例：米、パン、牛乳、野菜、果物、お菓子、清涼飲料水、弁当（テイクアウト）、冷凍食品 など
       ・taxRate = 10（標準税率）: 酒類、外食（イートイン）、衣類、文具、日用品、医薬品、電子機器 など
       ※ 判断が難しい場合は 10 とすること。
-    - 消費税（taxAmount）: レシートに記載された消費税額の総額を数値で読み取ること。記載がない場合は0とすること。
-    - 8%対象税込合計（total8Amount）: レシートに記載された「8%対象の【税込】合計金額」を読み取ること。税抜金額や消費税額のみを読み取らないこと。記載がない場合は0とすること。
-    - 10%対象税込合計（total10Amount）: レシートに記載された「10%対象の【税込】合計金額」を読み取ること。税抜金額や消費税額のみを読み取らないこと。記載がない場合は0とすること。
-    - 税抜き金額（preTaxAmount）: レシートに「税抜き」「小計（税抜）」「小計」など税抜き金額が記載されている場合はその数値を読み取ること。記載がない場合は0とすること。
+    - 消費税総額（taxAmount）: レシートに記載された消費税額の総額。記載がなければ0。
+    - 8%対象額（target8Amount）: レシートに記載された「8%対象」の金額。税込・税抜問わず印字されている数値をそのまま抽出すること。記載がなければ0。
+    - 8%消費税額（tax8Amount）: レシートに記載された「8%消費税」の金額。記載がなければ0。
+    - 8%は内税か？（is8TaxIncluded）: target8Amountが「税込（内税）」の金額であれば true、「税抜（外税）」の金額であれば false を設定すること。
+    - 10%対象額（target10Amount）: レシートに記載された「10%対象」の金額。税込・税抜問わず印字されている数値をそのまま抽出すること。記載がなければ0。
+    - 10%消費税額（tax10Amount）: レシートに記載された「10%消費税」の金額。記載がなければ0。
+    - 10%は内税か？（is10TaxIncluded）: target10Amountが「税込（内税）」の金額であれば true、「税抜（外税）」の金額であれば false を設定すること。
+    - 税抜き金額（preTaxAmount）: レシートに「税抜き」「小計（税抜）」など税抜き総額が記載されている場合はその数値を読み取ること。記載がなければ0。
   `;
 
   const response = await ai.models.generateContent({
@@ -62,10 +66,14 @@ export const extractReceiptData = async (base64Image: string, mimeType: string):
           date: { type: Type.STRING, description: "YYYY-MM-DD形式の日付" },
           totalAmount: { type: Type.NUMBER, description: "支払い合計金額（数値のみ、記号・カンマなし）" },
           currency: { type: Type.STRING, description: "JPY, USD等のISO通貨コード" },
-          taxAmount: { type: Type.NUMBER, description: "消費税額の総額。記載なければ0" },
-          total8Amount: { type: Type.NUMBER, description: "8%対象商品の税込合計金額。記載なければ0" },
-          total10Amount: { type: Type.NUMBER, description: "10%対象商品の税込合計金額。記載なければ0" },
-          preTaxAmount: { type: Type.NUMBER, description: "税抜き金額。記載なければ0" },
+          taxAmount: { type: Type.NUMBER, description: "消費税額の総額" },
+          target8Amount: { type: Type.NUMBER, description: "8%対象金額（印字そのまま）" },
+          tax8Amount: { type: Type.NUMBER, description: "8%消費税額" },
+          is8TaxIncluded: { type: Type.BOOLEAN, description: "target8Amountが税込ならtrue、税抜ならfalse" },
+          target10Amount: { type: Type.NUMBER, description: "10%対象金額（印字そのまま）" },
+          tax10Amount: { type: Type.NUMBER, description: "10%消費税額" },
+          is10TaxIncluded: { type: Type.BOOLEAN, description: "target10Amountが税込ならtrue、税抜ならfalse" },
+          preTaxAmount: { type: Type.NUMBER, description: "税抜き金額" },
           category: { type: Type.STRING },
           items: {
             type: Type.ARRAY,
@@ -89,27 +97,35 @@ export const extractReceiptData = async (base64Image: string, mimeType: string):
   const rawJson = response.text || "{}";
   const parsed = JSON.parse(rawJson);
 
-  // 8%/10%合計の明示がない、または明らかに誤検知（1円など）の場合、商品のtaxRateから再集計
-  let total8Amount = parsed.total8Amount || 0;
-  let total10Amount = parsed.total10Amount || 0;
+  // --- アプリケーション側での確実な税込計算ロジック ---
+  let total8Amount = 0;
+  let total10Amount = 0;
 
-  const isInvalidTotal = (total8Amount === 0 && total10Amount === 0) || (total8Amount < 10 && total10Amount < 10);
+  const t8 = parsed.target8Amount || 0;
+  const tax8 = parsed.tax8Amount || 0;
+  if (t8 > 0) {
+    total8Amount = parsed.is8TaxIncluded ? t8 : (t8 + tax8);
+  }
+
+  const t10 = parsed.target10Amount || 0;
+  const tax10 = parsed.tax10Amount || 0;
+  if (t10 > 0) {
+    total10Amount = parsed.is10TaxIncluded ? t10 : (t10 + tax10);
+  }
+
+  // 万が一レシートに一切の税率記載がない場合（Amazonなど）の最終フェイルセーフ
+  // 全商品の合計金額から逆算・推計する既存の強力なロジックを流用
+  const isInvalidTotal = (total8Amount === 0 && total10Amount === 0);
 
   if (isInvalidTotal && parsed.items?.length > 0) {
-    total8Amount = 0;
-    total10Amount = 0;
-    
-    // 商品の合計が税抜きか税込かを判定するため、priceの合計を出す
     const itemsTotal = parsed.items.reduce((sum: number, item: any) => sum + (item.price || 0), 0);
     const isTaxExcluded = parsed.preTaxAmount && Math.abs(itemsTotal - parsed.preTaxAmount) < 5;
 
     for (const item of parsed.items) {
-      // isTaxExcludedがtrueならpriceを税込みに変換して加算
       let itemPrice = item.price || 0;
       if (isTaxExcluded) {
         itemPrice = Math.floor(itemPrice * (item.taxRate === 8 ? 1.08 : 1.10));
       }
-
       if (item.taxRate === 8) {
         total8Amount += itemPrice;
       } else {
@@ -117,6 +133,10 @@ export const extractReceiptData = async (base64Image: string, mimeType: string):
       }
     }
   }
+
+  // パース結果（AIの生データ）に新しく計算した税込合計を上書きして返す
+  parsed.total8Amount = total8Amount;
+  parsed.total10Amount = total10Amount;
 
   const preTaxItem = parsed.preTaxAmount ? [{ name: '買物小計（税抜き）', price: parsed.preTaxAmount }] : [];
   const taxItem = parsed.taxAmount ? [{ name: '消費税', price: parsed.taxAmount }] : [];
